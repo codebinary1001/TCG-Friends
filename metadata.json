@@ -1,0 +1,11 @@
+{
+  "name": "TCG Friends",
+  "description": "Meet people, make friends, collect unique Legendary TCG cards for every friendship, and compete on the global leaderboard.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
