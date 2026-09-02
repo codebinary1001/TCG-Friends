@@ -1,5 +1,5 @@
 import { GoogleGenAI, Type } from '@google/genai';
-import { User, DailyMatchRecommendation } from '../types/tcg';
+import type { User, DailyMatchRecommendation } from '../types/tcg.ts';
 
 let aiInstance: GoogleGenAI | null = null;
 

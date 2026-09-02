@@ -1,9 +1,10 @@
-import express, { Request, Response, Router } from 'express';
-import { db } from './db';
-import { generateMatchExplanations } from './gemini';
-import { WebRTCSignalingMessage } from '../types/tcg';
+import express from 'express';
+import type { Request, Response } from 'express';
+import { db } from './db.ts';
+import { generateMatchExplanations } from './gemini.ts';
+import type { WebRTCSignalingMessage } from '../types/tcg.ts';
 
-export const apiRouter = Router();
+export const apiRouter = express.Router();
 
 apiRouter.use(express.json({ limit: '15mb' }));
 

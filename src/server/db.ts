@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
-import {
+import type {
   User,
   UserPublicProfile,
   Friendship,
@@ -12,7 +12,7 @@ import {
   CardSnapshot,
   LeaderboardEntry,
   CardTheme,
-} from '../types/tcg';
+} from '../types/tcg.ts';
 
 interface DatabaseSchema {
   users: Record<string, User & { passwordHash: string; salt: string }>;
@@ -52,55 +52,27 @@ class DatabaseService {
   private load() {
     try {
       if (!fs.existsSync(DATA_DIR)) {
-        fs.mkdirSync(DATA_DIR, { recursive: true });
+        try {
+          fs.mkdirSync(DATA_DIR, { recursive: true });
+        } catch {}
       }
       if (fs.existsSync(DB_FILE)) {
         const raw = fs.readFileSync(DB_FILE, 'utf-8');
-        const parsed = JSON.parse(raw);
-        this.data = {
-          users: parsed.users || {},
-          friendships: parsed.friendships || {},
-          friendRequests: parsed.friendRequests || {},
-          cards: parsed.cards || {},
-          messages: parsed.messages || {},
-          notifications: parsed.notifications || {},
-          dailyRecommendations: parsed.dailyRecommendations || {},
-          blockedUsers: parsed.blockedUsers || {},
-          reports: parsed.reports || {},
-        };
-
-        // Filter out any previous demo users if present
-        const demoUserIds = ['usr_alex_001', 'usr_sarah_002', 'usr_marcus_003', 'usr_elena_004', 'usr_kai_005', 'usr_maya_006'];
-        let hasDemoUsers = false;
-        demoUserIds.forEach((id) => {
-          if (this.data.users[id]) {
-            delete this.data.users[id];
-            hasDemoUsers = true;
+        if (raw && raw.trim().length > 0) {
+          const parsed = JSON.parse(raw);
+          if (parsed && typeof parsed === 'object') {
+            this.data = {
+              users: parsed.users || {},
+              friendships: parsed.friendships || {},
+              friendRequests: parsed.friendRequests || {},
+              cards: parsed.cards || {},
+              messages: parsed.messages || {},
+              notifications: parsed.notifications || {},
+              dailyRecommendations: parsed.dailyRecommendations || {},
+              blockedUsers: parsed.blockedUsers || {},
+              reports: parsed.reports || {},
+            };
           }
-        });
-        if (hasDemoUsers) {
-          // Clean up cards, friendships, messages associated with demo users
-          Object.keys(this.data.cards).forEach((k) => {
-            if (demoUserIds.includes(this.data.cards[k].originalUserId) || demoUserIds.includes(this.data.cards[k].ownerId)) {
-              delete this.data.cards[k];
-            }
-          });
-          Object.keys(this.data.friendships).forEach((k) => {
-            if (demoUserIds.includes(this.data.friendships[k].user1Id) || demoUserIds.includes(this.data.friendships[k].user2Id)) {
-              delete this.data.friendships[k];
-            }
-          });
-          Object.keys(this.data.friendRequests).forEach((k) => {
-            if (demoUserIds.includes(this.data.friendRequests[k].senderId) || demoUserIds.includes(this.data.friendRequests[k].receiverId)) {
-              delete this.data.friendRequests[k];
-            }
-          });
-          Object.keys(this.data.messages).forEach((k) => {
-            if (demoUserIds.includes(this.data.messages[k].senderId) || demoUserIds.includes(this.data.messages[k].receiverId)) {
-              delete this.data.messages[k];
-            }
-          });
-          this.save();
         }
       }
     } catch (e) {
@@ -111,7 +83,9 @@ class DatabaseService {
   private save() {
     try {
       if (!fs.existsSync(DATA_DIR)) {
-        fs.mkdirSync(DATA_DIR, { recursive: true });
+        try {
+          fs.mkdirSync(DATA_DIR, { recursive: true });
+        } catch {}
       }
       fs.writeFileSync(DB_FILE, JSON.stringify(this.data, null, 2), 'utf-8');
     } catch (e) {
