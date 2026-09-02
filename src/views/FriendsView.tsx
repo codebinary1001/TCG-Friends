@@ -4,28 +4,26 @@ import { useRealtime } from '../context/RealtimeContext';
 import { UserPublicProfile, Friendship, FriendRequest, Message } from '../types/tcg';
 import { Card3D } from '../components/Card3D';
 import { FriendshipTriviaModal } from '../components/FriendshipTriviaModal';
+import { MinigamesModal } from '../components/MinigamesModal';
 import {
   Users,
   Search,
   MessageCircle,
-  Phone,
-  Video,
   Flame,
   Send,
   Mic,
-  MicOff,
   Square,
   Sparkles,
   UserCheck,
   UserX,
   Layers,
-  Award,
   ChevronLeft,
   X,
   Volume2,
-  Clock,
   Play,
   Pause,
+  Trash2,
+  Gamepad2,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -41,7 +39,7 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
   onNavigateToCollection,
 }) => {
   const { token, currentUser } = useAuth();
-  const { initiateCall, setOnMessageReceived, onlineUserIds } = useRealtime();
+  const { setOnMessageReceived, onlineUserIds } = useRealtime();
 
   const [tab, setTab] = useState<'friends' | 'requests'>('friends');
   const [friendsList, setFriendsList] = useState<{ friendship: Friendship; friend: UserPublicProfile }[]>([]);
@@ -56,13 +54,20 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
   const [isSending, setIsSending] = useState(false);
   const [inspectCardFriend, setInspectCardFriend] = useState<UserPublicProfile | null>(null);
   const [isTriviaOpen, setIsTriviaOpen] = useState(false);
+  const [isMinigamesOpen, setIsMinigamesOpen] = useState(false);
 
-  // Audio recording state
+  // Audio recording & Preview state
   const [isRecording, setIsRecording] = useState(false);
   const [recordingDuration, setRecordingDuration] = useState(0);
+  const [recordedAudioData, setRecordedAudioData] = useState<string | null>(null);
+  const [recordedAudioDuration, setRecordedAudioDuration] = useState(0);
+  const [isPlayingPreview, setIsPlayingPreview] = useState(false);
+  const [previewProgress, setPreviewProgress] = useState(0);
+
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const recordingTimerRef = useRef<any>(null);
+  const previewAudioRef = useRef<HTMLAudioElement | null>(null);
 
   const chatEndRef = useRef<HTMLDivElement>(null);
 
@@ -99,6 +104,9 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
   // Fetch messages when selected friend changes
   useEffect(() => {
     if (!token || !selectedFriendId) return;
+
+    // Reset voice recording preview on friend switch
+    handleDiscardVoicePreview();
 
     const fetchMessages = async () => {
       try {
@@ -144,7 +152,7 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
 
   const handleSendMessage = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    if (!token || !selectedFriendId || (!inputText.trim() && !isRecording)) return;
+    if (!token || !selectedFriendId || (!inputText.trim() && !isRecording && !recordedAudioData)) return;
 
     const textToSend = inputText.trim();
     setInputText('');
@@ -181,6 +189,7 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
   // Voice Note Recording
   const startRecording = async () => {
     try {
+      handleDiscardVoicePreview();
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const mediaRecorder = new MediaRecorder(stream);
       mediaRecorderRef.current = mediaRecorder;
@@ -192,38 +201,16 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
         }
       };
 
-      mediaRecorder.onstop = async () => {
+      mediaRecorder.onstop = () => {
         const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
         stream.getTracks().forEach((t) => t.stop());
 
         const reader = new FileReader();
         reader.readAsDataURL(audioBlob);
-        reader.onloadend = async () => {
+        reader.onloadend = () => {
           const base64data = reader.result as string;
-          if (token && selectedFriendId) {
-            try {
-              const res = await fetch('/api/messages', {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  Authorization: `Bearer ${token}`,
-                },
-                body: JSON.stringify({
-                  receiverId: selectedFriendId,
-                  content: '🎙️ Voice Message',
-                  type: 'voice',
-                  audioDataUrl: base64data,
-                  audioDurationSeconds: recordingDuration,
-                }),
-              });
-              if (res.ok) {
-                const data = await res.json();
-                setMessages((prev) => [...prev, data.message]);
-              }
-            } catch (e) {
-              console.error(e);
-            }
-          }
+          setRecordedAudioData(base64data);
+          setRecordedAudioDuration(recordingDuration || 1);
         };
       };
 
@@ -243,6 +230,79 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
       mediaRecorderRef.current.stop();
       setIsRecording(false);
       if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
+    }
+  };
+
+  const handleTogglePreviewPlay = () => {
+    if (!previewAudioRef.current && recordedAudioData) {
+      const audio = new Audio(recordedAudioData);
+      previewAudioRef.current = audio;
+      audio.ontimeupdate = () => {
+        if (audio.duration) {
+          setPreviewProgress((audio.currentTime / audio.duration) * 100);
+        }
+      };
+      audio.onended = () => {
+        setIsPlayingPreview(false);
+        setPreviewProgress(0);
+      };
+    }
+
+    if (previewAudioRef.current) {
+      if (isPlayingPreview) {
+        previewAudioRef.current.pause();
+        setIsPlayingPreview(false);
+      } else {
+        previewAudioRef.current.play();
+        setIsPlayingPreview(true);
+      }
+    }
+  };
+
+  const handleDiscardVoicePreview = () => {
+    if (previewAudioRef.current) {
+      previewAudioRef.current.pause();
+      previewAudioRef.current = null;
+    }
+    setRecordedAudioData(null);
+    setRecordedAudioDuration(0);
+    setIsPlayingPreview(false);
+    setPreviewProgress(0);
+    setRecordingDuration(0);
+  };
+
+  const handleSendVoiceMessage = async () => {
+    if (!token || !selectedFriendId || !recordedAudioData) return;
+    setIsSending(true);
+
+    try {
+      const res = await fetch('/api/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          receiverId: selectedFriendId,
+          content: '🎙️ Voice Message',
+          type: 'voice',
+          audioDataUrl: recordedAudioData,
+          audioDurationSeconds: recordedAudioDuration,
+        }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setMessages((prev) => [...prev, data.message]);
+        handleDiscardVoicePreview();
+        setTimeout(() => {
+          chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+        }, 100);
+      }
+    } catch (e) {
+      console.error('Failed to send voice message', e);
+    } finally {
+      setIsSending(false);
     }
   };
 
@@ -470,7 +530,7 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
               <MessageCircle className="w-12 h-12 text-slate-400 dark:text-slate-600 mx-auto" />
               <h3 className="font-bold text-slate-900 dark:text-white text-base">Select a friend to start chatting</h3>
               <p className="text-xs text-slate-500 dark:text-slate-400 max-w-xs">
-                Maintain friendship streaks through messages, voice calls, video calls, or shared activities!
+                Maintain friendship streaks through messages, voice notes, TCG minigames, and shared activities!
               </p>
             </div>
           ) : (
@@ -516,12 +576,21 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
                 {/* Header Action Tools */}
                 <div className="flex items-center gap-1.5">
                   <button
+                    onClick={() => setIsMinigamesOpen(true)}
+                    className="p-2.5 rounded-[200px] bg-gradient-to-r from-amber-500 to-yellow-400 hover:from-amber-600 hover:to-yellow-500 text-slate-950 font-black border border-amber-400 transition-all flex items-center gap-1.5 text-xs px-3.5 cursor-pointer shadow-md shadow-amber-500/20"
+                    title="Play TCG Minigames & Card Duels"
+                  >
+                    <Gamepad2 className="w-4 h-4" />
+                    <span>Minigames</span>
+                  </button>
+
+                  <button
                     onClick={() => setIsTriviaOpen(true)}
                     className="p-2.5 rounded-[200px] bg-purple-50 dark:bg-purple-500/10 hover:bg-purple-100 dark:hover:bg-purple-500/20 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-500/30 transition-colors flex items-center gap-1 text-xs font-semibold px-3 cursor-pointer"
-                    title="Play Friendship Trivia / Activity"
+                    title="Play Friendship Trivia / Pulse"
                   >
                     <Sparkles className="w-3.5 h-3.5" />
-                    <span className="hidden sm:inline">Play Activity</span>
+                    <span className="hidden sm:inline">Trivia</span>
                   </button>
 
                   <button
@@ -531,22 +600,6 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
                   >
                     <Layers className="w-3.5 h-3.5" />
                     <span className="hidden sm:inline">Card Lore</span>
-                  </button>
-
-                  <button
-                    onClick={() => initiateCall(selectedFriend.id, selectedFriend.name, selectedFriend.avatarUrl, 'audio')}
-                    className="p-2.5 rounded-[200px] bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 hover:text-slate-900 dark:hover:text-white transition-colors cursor-pointer"
-                    title="Audio Call"
-                  >
-                    <Phone className="w-4 h-4" />
-                  </button>
-
-                  <button
-                    onClick={() => initiateCall(selectedFriend.id, selectedFriend.name, selectedFriend.avatarUrl, 'video')}
-                    className="p-2.5 rounded-[200px] bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 hover:text-slate-900 dark:hover:text-white transition-colors cursor-pointer"
-                    title="Video Call"
-                  >
-                    <Video className="w-4 h-4" />
                   </button>
                 </div>
               </div>
@@ -587,12 +640,17 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
                           }`}
                         >
                           {msg.type === 'voice' && msg.audioDataUrl ? (
-                            <div className="space-y-1">
-                              <div className="flex items-center gap-2">
-                                <Volume2 className="w-4 h-4 text-slate-950 shrink-0" />
-                                <span className="font-bold text-xs">Voice Note</span>
+                            <div className="space-y-1.5 min-w-[200px]">
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-1.5">
+                                  <Volume2 className="w-4 h-4 text-slate-950 shrink-0" />
+                                  <span className="font-bold text-xs">Voice Note</span>
+                                </div>
+                                <span className="text-[10px] font-mono font-bold opacity-80">
+                                  {msg.audioDurationSeconds || 5}s
+                                </span>
                               </div>
-                              <audio controls src={msg.audioDataUrl} className="w-full max-w-[220px] h-8 mt-1" />
+                              <audio controls src={msg.audioDataUrl} className="w-full h-8 mt-1 rounded-[200px]" />
                             </div>
                           ) : (
                             <p className="leading-relaxed whitespace-pre-wrap">{msg.content}</p>
@@ -613,26 +671,83 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
               {/* Chat Input Bar */}
               <div className="p-3 bg-white/90 dark:bg-slate-900/90 border-t border-slate-200 dark:border-slate-800/80">
                 {isRecording ? (
-                  <div className="flex items-center justify-between p-3.5 rounded-[200px] bg-rose-500/20 border border-rose-500/40 text-rose-700 dark:text-rose-300 px-5">
-                    <div className="flex items-center gap-2">
+                  /* Active Recording Bar */
+                  <div className="flex items-center justify-between p-3 rounded-[200px] bg-rose-500/15 border border-rose-500/40 text-rose-700 dark:text-rose-300 px-5 shadow-sm">
+                    <div className="flex items-center gap-2.5">
                       <span className="w-3 h-3 rounded-[200px] bg-rose-500 animate-ping" />
                       <span className="font-bold text-xs">Recording voice message... ({recordingDuration}s)</span>
                     </div>
                     <button
                       onClick={stopRecording}
-                      className="px-4 py-2 rounded-[200px] bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs flex items-center gap-1.5 cursor-pointer"
+                      className="px-4 py-2 rounded-[200px] bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs flex items-center gap-1.5 cursor-pointer shadow-sm transition-transform active:scale-95"
                     >
                       <Square className="w-3.5 h-3.5 fill-white" />
-                      <span>Send Voice</span>
+                      <span>Stop & Preview</span>
                     </button>
                   </div>
+                ) : recordedAudioData ? (
+                  /* Audio Preview Bar (Listen, Scrub, Discard or Send) */
+                  <div className="flex items-center justify-between p-2.5 sm:p-3 rounded-[200px] bg-amber-50 dark:bg-slate-800/90 border border-amber-400/60 dark:border-amber-400/40 text-slate-900 dark:text-white px-4 sm:px-5 shadow-md">
+                    <div className="flex items-center gap-3 flex-1 min-w-0 pr-2">
+                      <button
+                        type="button"
+                        onClick={handleTogglePreviewPlay}
+                        className="w-9 h-9 rounded-[200px] bg-amber-400 text-slate-950 flex items-center justify-center shrink-0 hover:bg-amber-300 transition-colors shadow-sm cursor-pointer"
+                        title={isPlayingPreview ? 'Pause Preview' : 'Play Preview'}
+                      >
+                        {isPlayingPreview ? (
+                          <Pause className="w-4 h-4 fill-slate-950" />
+                        ) : (
+                          <Play className="w-4 h-4 fill-slate-950 ml-0.5" />
+                        )}
+                      </button>
+
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between text-[11px] font-bold mb-1">
+                          <span className="text-amber-800 dark:text-amber-300">Voice Note Preview</span>
+                          <span className="font-mono text-slate-500 dark:text-slate-400">
+                            {recordedAudioDuration}s
+                          </span>
+                        </div>
+                        {/* Custom Animated Waveform bar */}
+                        <div className="w-full h-2 rounded-[200px] bg-slate-200 dark:bg-slate-700 overflow-hidden">
+                          <div
+                            className="h-full bg-amber-500 dark:bg-amber-400 transition-all duration-100"
+                            style={{ width: `${previewProgress}%` }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button
+                        type="button"
+                        onClick={handleDiscardVoicePreview}
+                        className="p-2.5 rounded-[200px] bg-slate-200/80 hover:bg-rose-500/20 dark:bg-slate-700 dark:hover:bg-rose-500/20 text-slate-700 hover:text-rose-600 dark:text-slate-300 dark:hover:text-rose-400 transition-colors cursor-pointer"
+                        title="Discard & Re-record"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={handleSendVoiceMessage}
+                        disabled={isSending}
+                        className="px-4 py-2.5 rounded-[200px] bg-gradient-to-r from-amber-500 to-yellow-400 hover:from-amber-600 hover:to-yellow-500 text-slate-950 font-bold text-xs flex items-center gap-1.5 shadow-md shadow-amber-500/20 disabled:opacity-50 cursor-pointer"
+                      >
+                        <Send className="w-3.5 h-3.5" />
+                        <span>Send Voice Note</span>
+                      </button>
+                    </div>
+                  </div>
                 ) : (
+                  /* Standard Text & Voice Input Form */
                   <form onSubmit={handleSendMessage} className="flex items-center gap-2">
                     <button
                       type="button"
                       onClick={startRecording}
-                      className="p-3 rounded-[200px] bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition-colors cursor-pointer"
-                      title="Record Voice Note"
+                      className="p-3 rounded-[200px] bg-slate-100 hover:bg-amber-500/15 dark:bg-slate-800 dark:hover:bg-amber-500/20 text-slate-700 dark:text-slate-300 hover:text-amber-600 dark:hover:text-amber-400 transition-colors cursor-pointer"
+                      title="Record Voice Note (Preview Before Sending)"
                     >
                       <Mic className="w-4 h-4" />
                     </button>
@@ -659,6 +774,16 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
           )}
         </div>
       </div>
+
+      {/* TCG Minigames Modal (Card Clash, Holo Memory, Speed Word Chain) */}
+      <MinigamesModal
+        isOpen={isMinigamesOpen}
+        onClose={() => setIsMinigamesOpen(false)}
+        friend={selectedFriend}
+        onGameCompleted={() => {
+          fetchData();
+        }}
+      />
 
       {/* Friendship Trivia / Activity Modal */}
       {selectedFriend && (
@@ -716,3 +841,4 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
     </div>
   );
 };
+

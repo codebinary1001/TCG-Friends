@@ -10,7 +10,6 @@ import { AddFriendModal } from './components/AddFriendModal';
 import { NotificationCenter } from './components/NotificationCenter';
 import { TutorialModal } from './components/TutorialModal';
 import { CardRevealModal } from './components/CardRevealModal';
-import { WebRTCCallModal } from './components/WebRTCCallModal';
 
 import { HomeView } from './views/HomeView';
 import { DiscoverView } from './views/DiscoverView';
@@ -177,9 +176,6 @@ const AppContent: React.FC = () => {
           handleNavigateToChat(friendId);
         }}
       />
-
-      {/* Real-time WebRTC Voice & Video Call Modal */}
-      <WebRTCCallModal />
     </div>
   );
 };

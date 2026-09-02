@@ -33,6 +33,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [token, setToken] = useState<string | null>(() => localStorage.getItem(TOKEN_KEY));
   const [isLoading, setIsLoading] = useState(true);
 
+  // Safe JSON fetch helper to prevent "Unexpected end of JSON input" crashes
+  const safeJson = async (res: Response) => {
+    try {
+      const text = await res.text();
+      return text ? JSON.parse(text) : {};
+    } catch {
+      return {};
+    }
+  };
+
   // Initial session restoration on mount
   useEffect(() => {
     const initSession = async () => {
@@ -48,9 +58,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           },
         });
         if (res.ok) {
-          const data = await res.json();
-          setCurrentUser(data.user);
-          setToken(storedToken);
+          const data = await safeJson(res);
+          if (data.user) {
+            setCurrentUser(data.user);
+            setToken(storedToken);
+          } else {
+            localStorage.removeItem(TOKEN_KEY);
+            setToken(null);
+            setCurrentUser(null);
+          }
         } else {
           localStorage.removeItem(TOKEN_KEY);
           setToken(null);
@@ -73,7 +89,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email: cleanEmail, password }),
     });
-    const data = await res.json();
+    const data = await safeJson(res);
     if (!res.ok) {
       throw new Error(data.error || 'Login failed');
     }
@@ -99,7 +115,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(formData),
     });
-    const data = await res.json();
+    const data = await safeJson(res);
     if (!res.ok) {
       throw new Error(data.error || 'Registration failed');
     }
@@ -136,7 +152,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       },
       body: JSON.stringify(updates),
     });
-    const data = await res.json();
+    const data = await safeJson(res);
     if (!res.ok) {
       throw new Error(data.error || 'Profile update failed');
     }
@@ -151,11 +167,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email: cleanEmail, newPassword }),
     });
-    const data = await res.json();
+    const data = await safeJson(res);
     if (!res.ok) {
       throw new Error(data.error || 'Password reset failed');
     }
-    return data.message;
+    return data.message || 'Password reset successful';
   };
 
   const refetchUser = async () => {
@@ -168,8 +184,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           },
         });
         if (res.ok) {
-          const data = await res.json();
-          setCurrentUser(data.user);
+          const data = await safeJson(res);
+          if (data.user) {
+            setCurrentUser(data.user);
+          }
         }
       } catch (e) {
         console.error('Refetch user error', e);

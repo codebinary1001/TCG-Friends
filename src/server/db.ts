@@ -26,7 +26,8 @@ interface DatabaseSchema {
   reports: Record<string, { id: string; reporterId: string; reportedUserId: string; reason: string; createdAt: string }>;
 }
 
-const DATA_DIR = path.resolve(process.cwd(), 'data');
+const isServerless = process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME;
+const DATA_DIR = isServerless ? '/tmp' : path.resolve(process.cwd(), 'data');
 const DB_FILE = path.resolve(DATA_DIR, 'tcg_friends.json');
 
 class DatabaseService {

@@ -2,8 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useRealtime } from '../context/RealtimeContext';
 import { Card3D } from '../components/Card3D';
+import { MinigamesModal } from '../components/MinigamesModal';
 import { TCGCard, DailyMatchRecommendation, UserPublicProfile } from '../types/tcg';
-import { Sparkles, Compass, Users, Layers, Trophy, Flame, Copy, Check, ArrowRight, UserPlus, MessageCircle, Calendar } from 'lucide-react';
+import { Sparkles, Compass, Users, Layers, Trophy, Flame, Copy, Check, ArrowRight, UserPlus, MessageCircle, Calendar, Gamepad2 } from 'lucide-react';
 import { motion } from 'motion/react';
 
 interface HomeViewProps {
@@ -25,6 +26,7 @@ export const HomeView: React.FC<HomeViewProps> = ({ onNavigate, onOpenAddFriend 
   });
   const [isLoading, setIsLoading] = useState(true);
   const [copiedId, setCopiedId] = useState(false);
+  const [isMinigamesOpen, setIsMinigamesOpen] = useState(false);
 
   useEffect(() => {
     if (!token) return;
@@ -156,6 +158,14 @@ export const HomeView: React.FC<HomeViewProps> = ({ onNavigate, onOpenAddFriend 
               >
                 <UserPlus className="w-3.5 h-3.5 text-amber-500 dark:text-amber-400" />
                 <span>Search by TCG ID</span>
+              </button>
+
+              <button
+                onClick={() => setIsMinigamesOpen(true)}
+                className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-[200px] bg-gradient-to-r from-amber-500 to-yellow-400 hover:from-amber-600 hover:to-yellow-500 text-slate-950 text-xs font-black transition-all shadow-md shadow-amber-500/20 cursor-pointer"
+              >
+                <Gamepad2 className="w-4 h-4" />
+                <span>Play Minigames</span>
               </button>
             </div>
           </div>
@@ -390,6 +400,15 @@ export const HomeView: React.FC<HomeViewProps> = ({ onNavigate, onOpenAddFriend 
           </div>
         </section>
       )}
+
+      {/* TCG Minigames Modal */}
+      <MinigamesModal
+        isOpen={isMinigamesOpen}
+        onClose={() => setIsMinigamesOpen(false)}
+        onGameCompleted={() => {
+          // Refresh collection or friends if needed
+        }}
+      />
     </div>
   );
 };
