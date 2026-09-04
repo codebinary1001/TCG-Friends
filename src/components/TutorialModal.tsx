@@ -31,9 +31,9 @@ const TUTORIAL_STEPS = [
     icon: MessageCircle,
     color: 'from-emerald-500 to-teal-500',
     title: '3. Connect',
-    headline: 'Chat or call people before deciding whether to become friends.',
+    headline: 'Chat and play minigames before deciding whether to become friends.',
     description:
-      'Send text & voice notes, start real-time HD audio or video calls, and play icebreaker activities to see if you click.',
+      'Send messages, play live multiplayer minigames when both are online, and explore activities together to see if you click.',
     badge: 'Real-Time Social',
   },
   {

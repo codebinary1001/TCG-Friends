@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { useRealtime } from '../context/RealtimeContext';
 import { TCGCard, CardTheme } from '../types/tcg';
 import { Card3D } from '../components/Card3D';
-import { Layers, Search, Filter, Sparkles, Trophy, ArrowUpDown, Flame, UserPlus } from 'lucide-react';
+import { Layers, Search, Filter, Sparkles, Trophy, ArrowUpDown, Flame, UserPlus, ArrowLeftRight } from 'lucide-react';
 import { motion } from 'motion/react';
 
 interface CollectionViewProps {
@@ -28,6 +29,7 @@ export const CollectionView: React.FC<CollectionViewProps> = ({
   onNavigateToDiscover,
 }) => {
   const { token, currentUser } = useAuth();
+  const { setUnlockedCard } = useRealtime();
   const [cards, setCards] = useState<TCGCard[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedTheme, setSelectedTheme] = useState<'all' | CardTheme>('all');
@@ -219,9 +221,18 @@ export const CollectionView: React.FC<CollectionViewProps> = ({
               key={card.id}
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
-              className="flex justify-center"
+              className="flex flex-col items-center gap-3"
             >
               <Card3D cardData={card.cardData} size="md" />
+              <button
+                type="button"
+                onClick={() => setUnlockedCard(card)}
+                className="px-4 py-2 rounded-[200px] bg-white dark:bg-slate-900 hover:bg-amber-50 dark:hover:bg-amber-500/10 text-slate-700 dark:text-slate-200 hover:text-amber-800 dark:hover:text-amber-300 border border-slate-200 dark:border-slate-800 hover:border-amber-400 dark:hover:border-amber-500/40 text-xs font-bold transition-all shadow-sm flex items-center gap-1.5 cursor-pointer"
+                title="Watch the 3D card exchange animation for this card"
+              >
+                <ArrowLeftRight className="w-3.5 h-3.5 text-amber-500 stroke-[2.5]" />
+                <span>Replay Card Exchange</span>
+              </button>
             </motion.div>
           ))}
         </div>

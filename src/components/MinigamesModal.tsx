@@ -321,18 +321,33 @@ export const MinigamesModal: React.FC<MinigamesModalProps> = ({
     }
     if (token && friend?.id) {
       try {
-        await fetch('/api/friends/activity/complete', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            friendId: friend.id,
-            activityType: gameName,
-            score: points,
+        await Promise.all([
+          fetch('/api/friends/activity/complete', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({
+              friendId: friend.id,
+              activityType: gameName,
+              score: points,
+            }),
           }),
-        });
+          fetch('/api/minigames/finish', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({
+              opponentId: friend.id,
+              gameTitle: gameName,
+              winnerId: currentUser?.id,
+              score: points,
+            }),
+          }),
+        ]);
       } catch (err) {
         console.error('Failed to record activity completion', err);
       }

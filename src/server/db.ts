@@ -161,7 +161,7 @@ class DatabaseService {
       passwordHash,
       salt,
       name: params.name || 'New Collector',
-      age: params.age || 18,
+      age: params.age !== undefined && params.age >= 7 ? params.age : 18,
       tcgId,
       avatarUrl:
         params.avatarUrl ||
@@ -496,6 +496,10 @@ class DatabaseService {
     this.broadcast(req.senderId, 'friendship_accepted', { friendship, newCard: card1, friend: this.toPublicProfile(user2, req.senderId) });
     this.broadcast(req.receiverId, 'friendship_accepted', { friendship, newCard: card2, friend: this.toPublicProfile(user1, req.receiverId) });
 
+    (req as any).newCard = currentUserId === req.senderId ? card1 : card2;
+    (req as any).friendCard = currentUserId === req.senderId ? card2 : card1;
+    (req as any).friend = this.toPublicProfile(currentUserId === req.senderId ? user2 : user1, currentUserId);
+
     return req;
   }
 
@@ -678,14 +682,23 @@ class DatabaseService {
     senderId: string;
     receiverId: string;
     content: string;
-    type?: 'text' | 'voice' | 'activity_prompt' | 'call_log';
-    audioDataUrl?: string;
-    audioDurationSeconds?: number;
+    type?: 'text' | 'activity_prompt' | 'call_log' | 'minigame_challenge' | 'minigame_result';
+    minigameId?: string;
+    minigameType?: string;
+    score?: number;
   }): Message {
-    const { senderId, receiverId, content, type = 'text', audioDataUrl, audioDurationSeconds } = params;
+    const { senderId, receiverId, content, type = 'text', minigameId, minigameType, score } = params;
 
     const sender = this.data.users[senderId];
     if (!sender) throw new Error('Sender not found');
+
+    // Prevent messages between blocked parties
+    const isBlocked = Object.values(this.data.blockedUsers).some(
+      (b) =>
+        (b.userId === senderId && b.blockedUserId === receiverId) ||
+        (b.userId === receiverId && b.blockedUserId === senderId)
+    );
+    if (isBlocked) throw new Error('Cannot send messages to this user.');
 
     const msgId = 'msg_' + crypto.randomUUID().replace(/-/g, '').slice(0, 12);
     const msg: Message = {
@@ -694,23 +707,31 @@ class DatabaseService {
       receiverId,
       content,
       type,
-      audioDataUrl,
-      audioDurationSeconds,
+      minigameId,
+      minigameType,
+      score,
       createdAt: new Date().toISOString(),
     };
 
     this.data.messages[msgId] = msg;
 
     // Maintain friendship streak & record interaction
-    this.recordInteraction(senderId, receiverId, 'chat');
+    this.recordInteraction(senderId, receiverId, type === 'minigame_result' ? 'minigame' : 'chat');
 
     // Create notification
+    let notifBody = content.length > 50 ? content.slice(0, 47) + '...' : content;
+    if (type === 'minigame_challenge') {
+      notifBody = `🎮 Challenged you to a live ${minigameType || 'Minigame'} duel!`;
+    } else if (type === 'minigame_result') {
+      notifBody = `🏆 Completed a minigame match with you!`;
+    }
+
     this.createNotification({
       userId: receiverId,
       type: 'message',
       title: `💬 ${sender.name}`,
-      body: type === 'voice' ? '🎙️ Sent you a voice message' : content.length > 50 ? content.slice(0, 47) + '...' : content,
-      data: { messageId: msgId, senderId, senderName: sender.name },
+      body: notifBody,
+      data: { messageId: msgId, senderId, senderName: sender.name, type, minigameType },
     });
 
     this.save();
@@ -747,7 +768,7 @@ class DatabaseService {
   }
 
   // --- Interaction Streaks & Milestones ---
-  public recordInteraction(user1Id: string, user2Id: string, actionType: 'chat' | 'call' | 'activity') {
+  public recordInteraction(user1Id: string, user2Id: string, actionType: 'chat' | 'call' | 'activity' | 'minigame') {
     const f = this.findFriendship(user1Id, user2Id);
     if (!f) return;
 
@@ -762,7 +783,7 @@ class DatabaseService {
     if (actionType === 'call' && !f.milestones.includes('first_call')) {
       f.milestones.push('first_call');
     }
-    if (actionType === 'activity') {
+    if (actionType === 'activity' || actionType === 'minigame') {
       f.activitiesCompleted = (f.activitiesCompleted || 0) + 1;
       if (!f.milestones.includes('first_activity')) {
         f.milestones.push('first_activity');
@@ -864,6 +885,7 @@ class DatabaseService {
 
   // --- Safety & Moderation ---
   public blockUser(userId: string, blockedUserId: string) {
+    if (userId === blockedUserId) return;
     const id = `blk_${userId}_${blockedUserId}`;
     this.data.blockedUsers[id] = {
       id,
@@ -871,6 +893,43 @@ class DatabaseService {
       blockedUserId,
       createdAt: new Date().toISOString(),
     };
+
+    // Sever any active friendship between these two users
+    const friendshipKeys = Object.keys(this.data.friendships).filter((k) => {
+      const f = this.data.friendships[k];
+      return (
+        (f.user1Id === userId && f.user2Id === blockedUserId) ||
+        (f.user1Id === blockedUserId && f.user2Id === userId)
+      );
+    });
+    friendshipKeys.forEach((k) => {
+      delete this.data.friendships[k];
+    });
+
+    // Remove any pending friend requests
+    const requestKeys = Object.keys(this.data.friendRequests).filter((k) => {
+      const r = this.data.friendRequests[k];
+      return (
+        (r.senderId === userId && r.receiverId === blockedUserId) ||
+        (r.senderId === blockedUserId && r.receiverId === userId)
+      );
+    });
+    requestKeys.forEach((k) => {
+      delete this.data.friendRequests[k];
+    });
+
+    // Remove mutual collected cards
+    const cardKeys = Object.keys(this.data.cards).filter((k) => {
+      const c = this.data.cards[k];
+      return (
+        (c.ownerId === userId && c.originalUserId === blockedUserId) ||
+        (c.ownerId === blockedUserId && c.originalUserId === userId)
+      );
+    });
+    cardKeys.forEach((k) => {
+      delete this.data.cards[k];
+    });
+
     this.save();
   }
 
@@ -886,15 +945,38 @@ class DatabaseService {
       .map((b) => b.blockedUserId);
   }
 
-  public reportUser(reporterId: string, reportedUserId: string, reason: string) {
+  public getBlockedUsersWithProfiles(userId: string): Array<{
+    id: string;
+    blockedUserId: string;
+    createdAt: string;
+    profile?: UserPublicProfile;
+  }> {
+    const records = Object.values(this.data.blockedUsers).filter((b) => b.userId === userId);
+    return records.map((rec) => {
+      const target = this.data.users[rec.blockedUserId];
+      return {
+        id: rec.id,
+        blockedUserId: rec.blockedUserId,
+        createdAt: rec.createdAt,
+        profile: target ? this.toPublicProfile(target, userId) : undefined,
+      };
+    });
+  }
+
+  public reportUser(reporterId: string, reportedUserId: string, reason: string, details?: string, autoBlock?: boolean) {
     const id = 'rep_' + crypto.randomUUID().replace(/-/g, '').slice(0, 12);
     this.data.reports[id] = {
       id,
       reporterId,
       reportedUserId,
-      reason,
+      reason: details ? `${reason} - ${details}` : reason,
       createdAt: new Date().toISOString(),
     };
+
+    if (autoBlock) {
+      this.blockUser(reporterId, reportedUserId);
+    }
+
     this.save();
   }
 

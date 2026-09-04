@@ -219,9 +219,9 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onOpenAuth }) => {
                   <MessageCircle className="w-4 h-4" />
                   <span>Connect</span>
                 </div>
-                <h4 className="text-lg font-bold text-white">Chat or Call</h4>
+                <h4 className="text-lg font-bold text-white">Chat & Minigames</h4>
                 <p className="text-xs text-slate-400 leading-relaxed">
-                  Chat, send voice notes, or start real-time HD audio/video calls to genuinely get to know each other.
+                  Chat in real-time and play live interactive minigames when both friends are online together.
                 </p>
               </div>
             </div>

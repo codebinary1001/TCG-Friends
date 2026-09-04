@@ -123,11 +123,29 @@ export interface Message {
   senderId: string;
   receiverId: string;
   content: string;
-  type: 'text' | 'voice' | 'activity_prompt' | 'call_log';
-  audioDataUrl?: string;
-  audioDurationSeconds?: number;
+  type: 'text' | 'activity_prompt' | 'call_log' | 'minigame_challenge' | 'minigame_result';
+  minigameId?: string;
+  minigameType?: string;
+  score?: number;
   createdAt: string;
   readAt?: string;
+}
+
+export interface BlockedUserRecord {
+  id: string;
+  userId: string;
+  blockedUserId: string;
+  blockedProfile?: UserPublicProfile;
+  createdAt: string;
+}
+
+export interface ReportRecord {
+  id: string;
+  reporterId: string;
+  reportedUserId: string;
+  reason: string;
+  details?: string;
+  createdAt: string;
 }
 
 export interface NotificationItem {

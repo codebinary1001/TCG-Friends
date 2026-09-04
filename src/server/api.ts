@@ -70,11 +70,16 @@ apiRouter.post('/auth/register', (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Password must be at least 6 characters.' });
     }
 
+    const parsedAge = Number(age);
+    if (isNaN(parsedAge) || parsedAge < 7) {
+      return res.status(400).json({ error: 'You must be at least 7 years old to create an account.' });
+    }
+
     const user = db.createUser({
       email,
       password,
       name,
-      age: Number(age) || 18,
+      age: parsedAge,
       avatarUrl,
       bio,
       hobbies: Array.isArray(hobbies) ? hobbies : [],
@@ -353,7 +358,13 @@ apiRouter.post('/friends/requests/:id/respond', (req: Request, res: Response) =>
   try {
     if (action === 'accept') {
       const reqRecord = db.acceptFriendRequest(id, user.id);
-      return res.json({ success: true, request: reqRecord });
+      return res.json({
+        success: true,
+        request: reqRecord,
+        newCard: (reqRecord as any).newCard,
+        friendCard: (reqRecord as any).friendCard,
+        friend: (reqRecord as any).friend,
+      });
     } else if (action === 'decline') {
       const reqRecord = db.declineFriendRequest(id, user.id);
       return res.json({ success: true, request: reqRecord });
@@ -438,8 +449,8 @@ apiRouter.post('/messages', (req: Request, res: Response) => {
   const user = getAuthUser(req);
   if (!user) return res.status(401).json({ error: 'Unauthorized' });
 
-  const { receiverId, content, type, audioDataUrl, audioDurationSeconds } = req.body;
-  if (!receiverId || (!content && !audioDataUrl)) {
+  const { receiverId, content, type, minigameId, minigameType, score } = req.body;
+  if (!receiverId || !content) {
     return res.status(400).json({ error: 'Receiver ID and content are required' });
   }
 
@@ -447,10 +458,11 @@ apiRouter.post('/messages', (req: Request, res: Response) => {
     const msg = db.sendMessage({
       senderId: user.id,
       receiverId,
-      content: content || 'Voice Message',
-      type: type || (audioDataUrl ? 'voice' : 'text'),
-      audioDataUrl,
-      audioDurationSeconds,
+      content,
+      type: type || 'text',
+      minigameId,
+      minigameType,
+      score,
     });
 
     return res.status(201).json({ message: msg });
@@ -468,6 +480,35 @@ apiRouter.post('/messages/mark-read', (req: Request, res: Response) => {
     db.markMessagesAsRead(user.id, friendId);
   }
   return res.json({ success: true });
+});
+
+// -------------------------------------------------------------
+// MINIGAMES (LIVE MULTIPLAYER & CO-OP)
+// -------------------------------------------------------------
+apiRouter.post('/minigames/finish', (req: Request, res: Response) => {
+  const user = getAuthUser(req);
+  if (!user) return res.status(401).json({ error: 'Unauthorized' });
+
+  const { opponentId, gameTitle, winnerId, score } = req.body;
+  if (!opponentId || !gameTitle) {
+    return res.status(400).json({ error: 'Opponent and game title required' });
+  }
+
+  try {
+    db.recordInteraction(user.id, opponentId, 'minigame');
+    const msg = db.sendMessage({
+      senderId: user.id,
+      receiverId: opponentId,
+      content: winnerId === user.id ? `⚔️ Won the ${gameTitle} duel!` : `🎮 Completed a round of ${gameTitle}!`,
+      type: 'minigame_result',
+      minigameType: gameTitle,
+      score: score || 100,
+    });
+
+    return res.json({ success: true, message: msg });
+  } catch (err: any) {
+    return res.status(400).json({ error: err.message || 'Failed to record game' });
+  }
 });
 
 // -------------------------------------------------------------
@@ -539,8 +580,16 @@ apiRouter.get('/leaderboard', (req: Request, res: Response) => {
 });
 
 // -------------------------------------------------------------
-// SAFETY & REPORTING
+// SAFETY & REPORTING (BLOCK, UNBLOCK, REPORT, BLOCKED LIST)
 // -------------------------------------------------------------
+apiRouter.get('/safety/blocked', (req: Request, res: Response) => {
+  const user = getAuthUser(req);
+  if (!user) return res.status(401).json({ error: 'Unauthorized' });
+
+  const blockedList = db.getBlockedUsersWithProfiles(user.id);
+  return res.json({ blocked: blockedList });
+});
+
 apiRouter.post('/safety/block', (req: Request, res: Response) => {
   const user = getAuthUser(req);
   if (!user) return res.status(401).json({ error: 'Unauthorized' });
@@ -549,7 +598,7 @@ apiRouter.post('/safety/block', (req: Request, res: Response) => {
   if (!targetUserId) return res.status(400).json({ error: 'Target user required' });
 
   db.blockUser(user.id, targetUserId);
-  return res.json({ success: true, message: 'User blocked' });
+  return res.json({ success: true, message: 'User blocked successfully.' });
 });
 
 apiRouter.post('/safety/unblock', (req: Request, res: Response) => {
@@ -560,18 +609,23 @@ apiRouter.post('/safety/unblock', (req: Request, res: Response) => {
   if (!targetUserId) return res.status(400).json({ error: 'Target user required' });
 
   db.unblockUser(user.id, targetUserId);
-  return res.json({ success: true, message: 'User unblocked' });
+  return res.json({ success: true, message: 'User unblocked successfully.' });
 });
 
 apiRouter.post('/safety/report', (req: Request, res: Response) => {
   const user = getAuthUser(req);
   if (!user) return res.status(401).json({ error: 'Unauthorized' });
 
-  const { reportedUserId, reason } = req.body;
+  const { reportedUserId, reason, details, autoBlock } = req.body;
   if (!reportedUserId || !reason) {
     return res.status(400).json({ error: 'Reported user ID and reason are required.' });
   }
 
-  db.reportUser(user.id, reportedUserId, reason);
-  return res.json({ success: true, message: 'Report submitted. Our moderation team will review.' });
+  db.reportUser(user.id, reportedUserId, reason, details, Boolean(autoBlock));
+  return res.json({
+    success: true,
+    message: autoBlock
+      ? 'Report submitted and user blocked. Our moderation team will review this incident.'
+      : 'Report submitted. Our moderation team will review this incident promptly.',
+  });
 });

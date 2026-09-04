@@ -4,7 +4,7 @@ import { useRealtime } from '../context/RealtimeContext';
 import { Card3D } from '../components/Card3D';
 import { MinigamesModal } from '../components/MinigamesModal';
 import { TCGCard, DailyMatchRecommendation, UserPublicProfile } from '../types/tcg';
-import { Sparkles, Compass, Users, Layers, Trophy, Flame, Copy, Check, ArrowRight, UserPlus, MessageCircle, Calendar, Gamepad2 } from 'lucide-react';
+import { Sparkles, Compass, Users, Layers, Trophy, Flame, Copy, Check, ArrowRight, UserPlus, MessageCircle, Calendar, Gamepad2, Zap, ArrowLeftRight } from 'lucide-react';
 import { motion } from 'motion/react';
 
 interface HomeViewProps {
@@ -14,7 +14,7 @@ interface HomeViewProps {
 
 export const HomeView: React.FC<HomeViewProps> = ({ onNavigate, onOpenAddFriend }) => {
   const { currentUser, token } = useAuth();
-  const { setUnlockedCard } = useRealtime();
+  const { setUnlockedCard, onlineUserIds } = useRealtime();
 
   const [cards, setCards] = useState<TCGCard[]>([]);
   const [dailyMatches, setDailyMatches] = useState<DailyMatchRecommendation[]>([]);
@@ -27,6 +27,10 @@ export const HomeView: React.FC<HomeViewProps> = ({ onNavigate, onOpenAddFriend 
   const [isLoading, setIsLoading] = useState(true);
   const [copiedId, setCopiedId] = useState(false);
   const [isMinigamesOpen, setIsMinigamesOpen] = useState(false);
+
+  const onlineFriends = friendsList.filter(
+    (f) => onlineUserIds.has(f.friend.id) || f.friend.onlineStatus === 'online'
+  );
 
   useEffect(() => {
     if (!token) return;
@@ -205,6 +209,36 @@ export const HomeView: React.FC<HomeViewProps> = ({ onNavigate, onOpenAddFriend 
         </div>
       </div>
 
+      {/* Online Friends Minigames Alert */}
+      {onlineFriends.length > 0 && (
+        <div className="p-4 sm:p-5 rounded-[36px] bg-gradient-to-r from-amber-500/15 via-emerald-500/15 to-yellow-500/15 border border-amber-400/40 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-sm">
+          <div className="flex items-center gap-3">
+            <div className="w-11 h-11 rounded-2xl bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-emerald-600 dark:text-emerald-400 shrink-0">
+              <Gamepad2 className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping" />
+                <h3 className="text-sm font-black text-slate-900 dark:text-white">
+                  {onlineFriends.length} {onlineFriends.length === 1 ? 'Friend is' : 'Friends are'} Online Now!
+                </h3>
+              </div>
+              <p className="text-xs text-slate-600 dark:text-slate-300 mt-0.5">
+                Live multiplayer minigames are unlocked. Challenge {onlineFriends[0].friend.name}
+                {onlineFriends.length > 1 ? ` and ${onlineFriends.length - 1} other` : ''} to Card Clash, Holo Memory, or Word Chain!
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => onNavigate('friends', { selectedFriendId: onlineFriends[0].friend.id })}
+            className="px-5 py-2.5 rounded-[200px] bg-gradient-to-r from-amber-400 to-yellow-400 hover:from-amber-300 hover:to-yellow-300 text-slate-950 font-black text-xs shadow-md cursor-pointer flex items-center justify-center gap-1.5 self-start sm:self-auto shrink-0 transition-all"
+          >
+            <Zap className="w-4 h-4 fill-slate-950" />
+            <span>Duel in Minigames</span>
+          </button>
+        </div>
+      )}
+
       {/* TODAY'S 3 AI MATCHES */}
       <section className="space-y-4">
         <div className="flex items-center justify-between">
@@ -345,8 +379,17 @@ export const HomeView: React.FC<HomeViewProps> = ({ onNavigate, onOpenAddFriend 
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
             {cards.slice(0, 3).map((card) => (
-              <div key={card.id} className="flex justify-center">
+              <div key={card.id} className="flex flex-col items-center gap-3">
                 <Card3D cardData={card.cardData} size="md" />
+                <button
+                  type="button"
+                  onClick={() => setUnlockedCard(card)}
+                  className="px-4 py-1.5 rounded-[200px] bg-white dark:bg-slate-900 hover:bg-amber-50 dark:hover:bg-amber-500/10 text-slate-700 dark:text-slate-200 hover:text-amber-800 dark:hover:text-amber-300 border border-slate-200 dark:border-slate-800 hover:border-amber-400 dark:hover:border-amber-500/40 text-xs font-bold transition-all shadow-sm flex items-center gap-1.5 cursor-pointer"
+                  title="Watch the 3D card exchange animation for this card"
+                >
+                  <ArrowLeftRight className="w-3.5 h-3.5 text-amber-500 stroke-[2.5]" />
+                  <span>Card Exchange Animation</span>
+                </button>
               </div>
             ))}
           </div>

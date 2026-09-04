@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { CardTheme, AvailabilitySlot } from '../types/tcg';
+import { CardTheme, AvailabilitySlot, BlockedUserRecord } from '../types/tcg';
 import { Card3D } from '../components/Card3D';
 import {
   User,
@@ -20,6 +20,9 @@ import {
   Plus,
   AlertCircle,
   CheckCircle2,
+  UserX,
+  ShieldCheck,
+  RefreshCw,
 } from 'lucide-react';
 import { motion } from 'motion/react';
 
@@ -95,6 +98,57 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ onReplayTutorial }) =>
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState(false);
+
+  // Safety & Blocked users
+  const [blockedUsers, setBlockedUsers] = useState<Array<{ id: string; blockedUserId: string; createdAt: string; profile?: any }>>([]);
+  const [isLoadingBlocked, setIsLoadingBlocked] = useState(false);
+  const [unblockingId, setUnblockingId] = useState<string | null>(null);
+
+  const fetchBlockedUsers = async () => {
+    const token = localStorage.getItem('tcg_auth_token');
+    if (!token) return;
+    setIsLoadingBlocked(true);
+    try {
+      const res = await fetch('/api/safety/blocked', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setBlockedUsers(data.blocked || []);
+      }
+    } catch (e) {
+      console.error('Failed to load blocked users', e);
+    } finally {
+      setIsLoadingBlocked(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchBlockedUsers();
+  }, []);
+
+  const handleUnblock = async (targetUserId: string) => {
+    const token = localStorage.getItem('tcg_auth_token');
+    if (!token) return;
+    setUnblockingId(targetUserId);
+    try {
+      const res = await fetch('/api/safety/unblock', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ targetUserId }),
+      });
+      if (res.ok) {
+        setBlockedUsers((prev) => prev.filter((b) => b.blockedUserId !== targetUserId));
+      }
+    } catch (e) {
+      console.error('Failed to unblock', e);
+    } finally {
+      setUnblockingId(null);
+    }
+  };
 
   const copyTCGId = () => {
     if (currentUser) {
@@ -329,11 +383,11 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ onReplayTutorial }) =>
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5">Age</label>
+                <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5">Age (7+)</label>
                 <input
                   type="number"
                   required
-                  min={13}
+                  min={7}
                   max={120}
                   value={age}
                   onChange={(e) => setAge(Number(e.target.value))}
@@ -616,6 +670,84 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ onReplayTutorial }) =>
                 <span>Add Slot</span>
               </button>
             </div>
+          </div>
+
+          {/* Safety & Blocked Users Management */}
+          <div className="p-6 rounded-[50px] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-4 shadow-sm">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <ShieldCheck className="w-5 h-5 text-emerald-500" />
+                <div>
+                  <h3 className="font-bold text-slate-900 dark:text-white text-sm">
+                    Safety & Blocked Users
+                  </h3>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                    Manage users you have restricted from contacting you
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={fetchBlockedUsers}
+                disabled={isLoadingBlocked}
+                className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors"
+                title="Refresh blocked list"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${isLoadingBlocked ? 'animate-spin' : ''}`} />
+              </button>
+            </div>
+
+            {blockedUsers.length === 0 ? (
+              <div className="p-4 rounded-[30px] bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800 text-center space-y-1">
+                <UserX className="w-5 h-5 text-slate-400 mx-auto" />
+                <p className="text-xs font-medium text-slate-600 dark:text-slate-400">
+                  No blocked users
+                </p>
+                <p className="text-[11px] text-slate-400 dark:text-slate-500">
+                  You haven't blocked anyone. You can block or report any profile at any time.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {blockedUsers.map((item) => (
+                  <div
+                    key={item.id}
+                    className="p-3.5 rounded-[24px] bg-slate-50 dark:bg-slate-950/70 border border-slate-200 dark:border-slate-800 flex items-center justify-between gap-3"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      {item.profile?.avatarUrl ? (
+                        <img
+                          src={item.profile.avatarUrl}
+                          alt={item.profile.name}
+                          className="w-9 h-9 rounded-full object-cover border border-slate-300 dark:border-slate-700 bg-slate-100 dark:bg-slate-800"
+                        />
+                      ) : (
+                        <div className="w-9 h-9 rounded-full bg-slate-200 dark:bg-slate-800 flex items-center justify-center font-bold text-xs text-slate-600 dark:text-slate-300">
+                          {item.profile?.name ? item.profile.name.charAt(0) : '?'}
+                        </div>
+                      )}
+                      <div className="min-w-0">
+                        <div className="text-xs font-bold text-slate-900 dark:text-white truncate">
+                          {item.profile?.name || 'Blocked User'}
+                        </div>
+                        <div className="text-[10px] font-mono text-slate-400 dark:text-slate-500">
+                          {item.profile?.tcgId || item.blockedUserId}
+                        </div>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => handleUnblock(item.blockedUserId)}
+                      disabled={unblockingId === item.blockedUserId}
+                      className="px-3.5 py-1.5 rounded-full text-xs font-bold text-rose-600 dark:text-rose-400 bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/40 dark:hover:bg-rose-900/60 border border-rose-200 dark:border-rose-900/50 transition-colors cursor-pointer disabled:opacity-50"
+                    >
+                      {unblockingId === item.blockedUserId ? 'Unblocking...' : 'Unblock'}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Submit Button */}

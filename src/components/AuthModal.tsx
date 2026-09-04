@@ -90,7 +90,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
     if (mode === 'signup' && step === 1) {
       if (!name.trim()) return setErrorMsg('Please enter your name.');
-      if (!age || Number(age) < 13) return setErrorMsg('You must be at least 13 years old to join.');
+      if (!age || Number(age) < 7) return setErrorMsg('You must be at least 7 years old to join.');
       if (!email.trim() || !password) return setErrorMsg('Email and password are required.');
       if (password.length < 6) return setErrorMsg('Password must be at least 6 characters.');
       setStep(2);
@@ -295,17 +295,17 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 </div>
 
                 <div>
-                  <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5 ml-2">Age</label>
+                  <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5 ml-2">Age (7+)</label>
                   <div className="relative">
                     <Calendar className="w-4 h-4 text-slate-400 dark:text-slate-500 absolute left-3.5 top-3.5" />
                     <input
                       type="number"
                       required
-                      min={13}
+                      min={7}
                       max={120}
                       value={age}
                       onChange={(e) => setAge(e.target.value ? Number(e.target.value) : '')}
-                      placeholder="21"
+                      placeholder="10"
                       className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-[200px] pl-9 pr-3 py-2.5 text-slate-900 dark:text-white text-sm focus:outline-none focus:border-amber-400 shadow-inner placeholder:text-slate-400 dark:placeholder:text-slate-500"
                     />
                   </div>

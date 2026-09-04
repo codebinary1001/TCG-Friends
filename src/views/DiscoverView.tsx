@@ -2,7 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { DailyMatchRecommendation, UserPublicProfile } from '../types/tcg';
 import { Card3D } from '../components/Card3D';
-import { Compass, Sparkles, UserPlus, MessageCircle, X, MapPin, Calendar } from 'lucide-react';
+import { ReportModal } from '../components/ReportModal';
+import { BlockModal } from '../components/BlockModal';
+import { Compass, Sparkles, UserPlus, MessageCircle, X, MapPin, Calendar, Flag, UserX, Shield } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 interface DiscoverViewProps {
@@ -21,6 +23,10 @@ export const DiscoverView: React.FC<DiscoverViewProps> = ({
   const [inspectUser, setInspectUser] = useState<UserPublicProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [requestSentIds, setRequestSentIds] = useState<string[]>([]);
+
+  // Safety modals
+  const [reportTarget, setReportTarget] = useState<UserPublicProfile | null>(null);
+  const [blockTarget, setBlockTarget] = useState<UserPublicProfile | null>(null);
 
   useEffect(() => {
     if (!token) return;
@@ -276,13 +282,32 @@ export const DiscoverView: React.FC<DiscoverViewProps> = ({
                     )}
                   </div>
 
-                  {/* Skip row */}
-                  <div className="flex items-center justify-end pt-1">
+                  {/* Secondary safety & skip row */}
+                  <div className="flex items-center justify-between pt-1 text-xs">
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        onClick={() => setReportTarget(rec.user)}
+                        className="px-2.5 py-1 rounded-[200px] bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/30 dark:hover:bg-rose-900/40 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-900/40 transition-colors flex items-center gap-1 font-bold cursor-pointer text-[11px]"
+                        title="Report inappropriate profile"
+                      >
+                        <Flag className="w-3 h-3" />
+                        <span>Report</span>
+                      </button>
+                      <button
+                        onClick={() => setBlockTarget(rec.user)}
+                        className="px-2.5 py-1 rounded-[200px] bg-slate-100 hover:bg-rose-50 dark:bg-slate-800 dark:hover:bg-rose-950/30 text-slate-600 hover:text-rose-600 dark:text-slate-400 dark:hover:text-rose-400 border border-slate-200 dark:border-slate-700 transition-colors flex items-center gap-1 font-bold cursor-pointer text-[11px]"
+                        title="Block this user"
+                      >
+                        <UserX className="w-3 h-3" />
+                        <span>Block</span>
+                      </button>
+                    </div>
+
                     <button
                       onClick={() => handleSkip(rec.user.id)}
-                      className="text-[11px] text-slate-500 hover:text-slate-800 dark:hover:text-slate-300 transition-colors px-3 py-1 rounded-[200px] cursor-pointer"
+                      className="text-slate-500 hover:text-slate-800 dark:hover:text-slate-300 transition-colors px-3 py-1 rounded-[200px] cursor-pointer text-xs font-semibold"
                     >
-                      Skip Recommendation
+                      Skip
                     </button>
                   </div>
                 </div>
@@ -332,7 +357,7 @@ export const DiscoverView: React.FC<DiscoverViewProps> = ({
               size="md"
             />
 
-            <div className="w-full mt-5">
+            <div className="w-full mt-5 space-y-2">
               <button
                 onClick={() => {
                   handleSendFriendRequest(inspectUser.id);
@@ -342,9 +367,58 @@ export const DiscoverView: React.FC<DiscoverViewProps> = ({
               >
                 Send Friend Request & Collect Card
               </button>
+
+              <div className="flex items-center justify-center gap-3 pt-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const target = inspectUser;
+                    setInspectUser(null);
+                    setReportTarget(target);
+                  }}
+                  className="text-xs text-rose-500 hover:text-rose-600 font-semibold flex items-center gap-1 px-3 py-1 rounded-full cursor-pointer"
+                >
+                  <Flag className="w-3.5 h-3.5" />
+                  <span>Report Profile</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const target = inspectUser;
+                    setInspectUser(null);
+                    setBlockTarget(target);
+                  }}
+                  className="text-xs text-slate-500 hover:text-rose-600 dark:text-slate-400 dark:hover:text-rose-400 font-semibold flex items-center gap-1 px-3 py-1 rounded-full cursor-pointer"
+                >
+                  <UserX className="w-3.5 h-3.5" />
+                  <span>Block</span>
+                </button>
+              </div>
             </div>
           </motion.div>
         </div>
+      )}
+
+      {/* Report Modal */}
+      {reportTarget && (
+        <ReportModal
+          reportedUser={reportTarget}
+          onClose={() => setReportTarget(null)}
+          onReportSuccess={() => {
+            setSkippedIds((prev) => [...prev, reportTarget.id]);
+          }}
+        />
+      )}
+
+      {/* Block Modal */}
+      {blockTarget && (
+        <BlockModal
+          targetUser={blockTarget}
+          onClose={() => setBlockTarget(null)}
+          onBlockSuccess={() => {
+            setSkippedIds((prev) => [...prev, blockTarget.id]);
+          }}
+        />
       )}
     </div>
   );
